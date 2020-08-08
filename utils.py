@@ -94,17 +94,23 @@ def data_to_labels_values(data, choices):
     # 度数の大きい順に並べ替え
     counter = collections.Counter(data)
     ranked_data = counter.most_common()
-    # 表示する選択肢のみに限定
-    ranked_data = [mc for mc in ranked_data if mc[0] in choices]
     print(f'ranked_data={ranked_data}')
+
+    # 表示する選択肢のみに限定
+    limited_ranked_data = [x for x in ranked_data if x[0] in choices]
+    print(f'limited_ranked_data={limited_ranked_data}')
+
     # ラベル
-    labels = [x[0] for x in ranked_data]
-    if len(set(data)) > len(ranked_data):
-        labels += ['その他']
+    labels = [x[0] for x in limited_ranked_data]
     # 値
-    values = [x[1] for x in ranked_data]
-    if len(set(data)) > len(ranked_data):
+    values = [x[1] for x in limited_ranked_data]
+
+    # 「その他」がある場合は末尾に追加
+    if len(ranked_data) > len(limited_ranked_data):
+        labels += ['その他']
         values += [len(data) - sum(values)]
+        print(f'others={[x for x in data if x not in choices]}')
+
     return labels, values
 
 
