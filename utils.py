@@ -1,5 +1,4 @@
 import collections
-import os
 import re
 from functools import reduce
 
@@ -11,24 +10,15 @@ from colour import Color
 # （参考）https://qiita.com/yniji/items/3fac25c2ffa316990d0c
 font = {'family': 'IPAexGothic'}
 
-# 入出力ディレクトリ
-INPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'inputs')
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'outputs')
 
-# 入力ファイルパス
-INPUT_FILENAME = 'Django 管理サイトアンケート（回答）.xlsx'
-# シート名
-SHEET_NAME = 'フォームの回答 1'
-
-
-def cellname_to_numbers(cellname):
+def cell_name_to_numbers(cell_name):
     """
     セル名を行番号、列番号に変換する
 
-    :param cellname: セル名 (e.g. 'A1')
-    :return: 行番号、列番号のタプル
+    :param cell_name: セル名 (e.g. 'A1')
+    :return: 行番号・列番号のタプル
     """
-    m = re.match(r'(\D+)(\d+)', cellname)
+    m = re.match(r'(\D+)(\d+)', cell_name)
     if m is None:
         raise ValueError('「A1」形式で指定してください')
     # 列番号（0から始まる）
@@ -39,14 +29,14 @@ def cellname_to_numbers(cellname):
     return colnum, rownum
 
 
-def get_column_values(sheet, cellname):
+def get_column_values(sheet, cell_name):
     """
     指定したセルから下方向の値を取得する
 
     :param sheet: xlrd.sheet.Sheetオブジェクト
-    :param cellname: 開始セル名 (e.g. 'A1')
+    :param cell_name: 開始セル名 (e.g. 'A1')
     """
-    colnum, rownum = cellname_to_numbers(cellname)
+    colnum, rownum = cell_name_to_numbers(cell_name)
     values = []
     for i in range(rownum, sheet.nrows):
         value = sheet.cell(i, colnum).value
@@ -69,16 +59,18 @@ def get_gradation_colors(color_start, color_end, steps):
     return [c.get_hex() for c in Color(color_start).range_to(Color(color_end), steps)]
 
 
-def get_data_from_workbook(cellname):
+def get_data_from_workbook(input_file_path, sheet_name, cell_name):
     """
     ワークブックからデータを取得する
 
-    :param cellname: 開始セル名 (e.g. 'A1')
+    :param input_file_path: 入力ファイルパス名
+    :param sheet_name: シート名
+    :param cell_name: 開始セル名 (e.g. 'A1')
     :return: データのリスト
     """
-    book = xlrd.open_workbook(os.path.join(INPUT_DIR, INPUT_FILENAME))
-    sheet = book.sheet_by_name(SHEET_NAME)
-    data = get_column_values(sheet, cellname)
+    book = xlrd.open_workbook(input_file_path)
+    sheet = book.sheet_by_name(sheet_name)
+    data = get_column_values(sheet, cell_name)
     return data
 
 
@@ -89,6 +81,7 @@ def data_to_labels_values(data, choices):
     度数の大きい順に並べ替えた上で、「choices」で指定した値以外のものは「その他」でまとめて表示する
 
     :param data: データのリスト
+    :param choices: 表示する選択肢
     :return: ラベルのリストと値のリストのタプル
     """
     # 度数の大きい順に並べ替え
@@ -114,112 +107,119 @@ def data_to_labels_values(data, choices):
     return labels, values
 
 
-def draw_pie_chart(cellname, title, choices, output_filename):
-    """
-    円グラフを描画して保存する
+class ChartDrawer:
+    def __init__(self, input_file_path, sheet_name, cell_name):
+        """
+        初期化処理
 
-    :param cellname: 開始セル名 (e.g. 'A1')
-    :param title: タイトル
-    :param choices: 表示する選択肢
-    :param output_filename: 出力ファイル名
-    """
-    # ワークブックからデータを取得
-    data = get_data_from_workbook(cellname)
-    print(f'data={data}')
-    # サンプル数
-    sample_size = len(data)
-    print(f'sample_size={sample_size}')
+        :param input_file_path: 入力ファイルパス名
+        :param sheet_name: シート名
+        :param cell_name: 開始セル名 (e.g. 'A1')
+        """
+        # 共通初期設定
+        plt.rc('font', **font)
 
-    # データを表示するラベルと値に変換
-    labels, values = data_to_labels_values(data, choices)
-    print(f'labels={labels}')
-    print(f'values={values}')
-    # 回答された選択肢の合計数
-    total_values = sum(values)
-    print(f'total_values={total_values}')
+        # ワークブックからデータを取得
+        self.data = get_data_from_workbook(input_file_path, sheet_name, cell_name)
+        print(f'data={self.data}')
 
-    # 共通初期設定
-    plt.rc('font', **font)
-    # キャンバス
-    fig = plt.figure(figsize=(8, 8))
-    # プロット領域（1x1分割の1番目に領域を配置せよという意味）
-    ax = fig.add_subplot(111)
+        # サンプル数
+        self.sample_size = len(self.data)
+        print(f'sample_size={self.sample_size}')
 
-    # 切片の色をグラデーションに
-    # （参考）https://github.com/vaab/colour
-    # （参考）https://www.tagindex.com/color/color_gradation.html
-    colors = get_gradation_colors('#236ab1', '#b8d5f1', len(values))
-    print(colors)
+    def draw_pie_chart(self, title, choices, output_image_path=None):
+        """
+        円グラフを描画して保存する
 
-    # 円グラフ
-    ax.pie(
-        values,
-        labels=labels,
-        colors=colors,
-        startangle=90,  # 頂点から開始
-        counterclock=False,  # 時計回り
-        wedgeprops={'linewidth': 2, 'edgecolor': "white"},  # 枠線
-        autopct='%.1f%%',  # パーセンテージで出力
-    )
-    # タイトル
-    ax.set_title(f'{title} (N={sample_size})', size=16, pad=20)
+        :param title: タイトル
+        :param choices: 表示する選択肢
+        :param output_image_path: 出力画像パス名
+        """
+        # データを表示するラベルと値に変換
+        labels, values = data_to_labels_values(self.data, choices)
+        print(f'labels={labels}')
+        print(f'values={values}')
+        # 回答された選択肢の合計数
+        total_values = sum(values)
+        print(f'total_values={total_values}')
 
-    # 描画
-    output_image_path = os.path.join(OUTPUT_DIR, output_filename)
-    # bbox_inches='tight'を指定すると余白を自動で調整
-    # （参考）https://www.haya-programming.com/entry/2018/10/11/030103
-    plt.savefig(output_image_path, bbox_inches='tight')
+        # キャンバス
+        fig = plt.figure(figsize=(8, 8))
+        # プロット領域（1x1分割の1番目に領域を配置せよという意味）
+        ax = fig.add_subplot(111)
 
+        # 切片の色をグラデーションに
+        # （参考）https://github.com/vaab/colour
+        # （参考）https://www.tagindex.com/color/color_gradation.html
+        colors = get_gradation_colors('#236ab1', '#b8d5f1', len(values))
+        print(colors)
 
-def draw_bar_chart(cellname, title, choices, output_filename):
-    """
-    横棒グラフを描画して保存する
+        # 円グラフ
+        ax.pie(
+            values,
+            labels=labels,
+            colors=colors,
+            startangle=90,  # 頂点から開始
+            counterclock=False,  # 時計回り
+            wedgeprops={'linewidth': 2, 'edgecolor': "white"},  # 枠線
+            autopct='%.1f%%',  # パーセンテージで出力
+        )
+        # タイトル
+        ax.set_title(f'{title} (N={self.sample_size})', size=16, pad=20)
 
-    :param cellname: 開始セル名 (e.g. 'A1')
-    :param title: タイトル
-    :param choices: 表示する選択肢
-    :param output_filename: 出力ファイル名
-    """
-    # ワークブックからデータを取得
-    data = get_data_from_workbook(cellname)
-    print(f'data={data}')
-    # サンプル数
-    sample_size = len(data)
-    print(f'sample_size={sample_size}')
+        # 描画
+        if output_image_path is None:
+            plt.show()
+        else:
+            # bbox_inches='tight'を指定すると余白を自動で調整
+            # （参考）https://www.haya-programming.com/entry/2018/10/11/030103
+            plt.savefig(output_image_path, bbox_inches='tight')
 
-    # カンマ区切りで分割して2次元のリストを平坦化
-    data = [value.split(', ') for value in data]
-    data = sum(data, [])
+    def draw_bar_chart(self, title, choices, output_image_path=None):
+        """
+        横棒グラフを描画して保存する
 
-    # データを表示するラベルと値に変換
-    labels, values = data_to_labels_values(data, choices)
-    print(f'labels={labels}')
-    print(f'values={values}')
-    # 回答された選択肢の合計数
-    total_values = sum(values)
-    print(f'total_values={total_values}')
+        :param title: タイトル
+        :param choices: 表示する選択肢
+        :param output_image_path: 出力画像パス名
+        """
+        # カンマ区切りで分割して2次元のリストを平坦化
+        data = [value.split(', ') for value in self.data]
+        data = sum(data, [])
 
-    # 共通初期設定
-    plt.rc('font', **font)
-    # キャンバス
-    fig = plt.figure(figsize=(8, 8))
-    # プロット領域（1x1分割の1番目に領域を配置せよという意味）
-    ax = fig.add_subplot(111)
+        # データを表示するラベルと値に変換
+        labels, values = data_to_labels_values(data, choices)
+        print(f'labels={labels}')
+        print(f'values={values}')
+        # 回答された選択肢の合計数
+        total_values = sum(values)
+        print(f'total_values={total_values}')
 
-    # Y軸を上下反転する
-    ax.invert_yaxis()
-    # 横棒グラフ
-    ax.barh(
-        labels,
-        values,
-        height=0.5,  # 棒の太さ
-    )
-    # グラフの右側に値を表示
-    for i, value in enumerate(values):
-        ax.text(value + 0.8, i, f'{value} ({(value / sample_size) * 100:.1f}%)')
-    # タイトル
-    ax.set_title(f'{title} (N={sample_size})', size=16, pad=30)
+        # 共通初期設定
+        plt.rc('font', **font)
+        # キャンバス
+        fig = plt.figure(figsize=(8, 8))
+        # プロット領域（1x1分割の1番目に領域を配置せよという意味）
+        ax = fig.add_subplot(111)
 
-    # 描画
-    output_image_path = os.path.join(OUTPUT_DIR, output_filename)
-    plt.savefig(output_image_path, bbox_inches='tight')
+        # Y軸を上下反転する
+        ax.invert_yaxis()
+        # 横棒グラフ
+        ax.barh(
+            labels,
+            values,
+            height=0.5,  # 棒の太さ
+        )
+        # グラフの右側に値を表示
+        for i, value in enumerate(values):
+            ax.text(value + 0.8, i, f'{value} ({(value / self.sample_size) * 100:.1f}%)')
+        # タイトル
+        ax.set_title(f'{title} (N={self.sample_size})', size=16, pad=30)
+
+        # 描画
+        if output_image_path is None:
+            plt.show()
+        else:
+            # bbox_inches='tight'を指定すると余白を自動で調整
+            # （参考）https://www.haya-programming.com/entry/2018/10/11/030103
+            plt.savefig(output_image_path, bbox_inches='tight')
