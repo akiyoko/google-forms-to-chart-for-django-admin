@@ -3,8 +3,10 @@ import re
 from functools import reduce
 
 import matplotlib.pyplot as plt
+import numpy as np
 import xlrd
 from colour import Color
+from matplotlib.ticker import PercentFormatter
 
 # フォント
 # （参考）https://qiita.com/yniji/items/3fac25c2ffa316990d0c
@@ -206,6 +208,53 @@ class ChartDrawer:
         for i, value in enumerate(values):
             self.ax.text(value + 0.8, i, f'{value} ({(value / self.sample_size) * 100:.1f}%)')
         # タイトル
+        self.ax.set_title(f'{title} (N={self.sample_size})', size=16, pad=30)
+
+        # 描画
+        if output_image_path is None:
+            plt.show()
+        else:
+            # bbox_inches='tight'を指定すると余白を自動で調整
+            # （参考）https://www.haya-programming.com/entry/2018/10/11/030103
+            plt.savefig(output_image_path, bbox_inches='tight')
+
+    def draw_histogram(self, title, xlabel, x_max, y_max, bins, output_image_path=None):
+        """
+        横棒グラフを描画して保存する
+
+        :param title: タイトル
+        :param xlabel: X軸のラベル名
+        :param x_max: X軸の表示上限
+        :param y_max: Y軸の表示上限
+        :param bins: ビン数
+        :param output_image_path: 出力画像パス名
+        """
+        # 階級幅
+        interval = int(x_max / bins)
+        print(f'interval={interval}')
+
+        # ヒストグラム
+        # weightsを指定して確率表示にする
+        # （参考）https://stackoverflow.com/a/16399202
+        self.ax.hist(
+            self.data,
+            bins=bins,
+            range=(interval, x_max + interval),
+            weights=np.ones(len(self.data)) / len(self.data),  # 確率表示
+            align='left' if interval == 1 else 'mid',  # 「left」でX軸のラベル表示を左にずらす
+        )
+
+        # X, Y方向の表示範囲
+        self.ax.set_xlim(interval / 2, x_max + interval / 2)
+        self.ax.set_ylim(0, y_max)
+        # 目盛り
+        # X軸の目盛りを X_MAX / BINS 刻みにする
+        self.ax.set_xticks(range(interval, x_max + interval, int(x_max / bins)))
+        # Y軸の目盛りはパーセント表示
+        self.ax.get_yaxis().set_major_formatter(PercentFormatter(1, decimals=0))
+        # タイトル
+        self.ax.set_xlabel(xlabel, size=14, labelpad=10)
+        self.ax.set_ylabel('度数分布', size=14, labelpad=10)
         self.ax.set_title(f'{title} (N={self.sample_size})', size=16, pad=30)
 
         # 描画
