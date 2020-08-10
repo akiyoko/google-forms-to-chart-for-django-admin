@@ -118,6 +118,10 @@ class ChartDrawer:
         """
         # 共通初期設定
         plt.rc('font', **font)
+        # キャンバス
+        fig = plt.figure(figsize=(8, 8))
+        # プロット領域（1x1分割の1番目に領域を配置せよという意味）
+        self.ax = fig.add_subplot(111)
 
         # ワークブックからデータを取得
         self.data = get_data_from_workbook(input_file_path, sheet_name, cell_name)
@@ -143,11 +147,6 @@ class ChartDrawer:
         total_values = sum(values)
         print(f'total_values={total_values}')
 
-        # キャンバス
-        fig = plt.figure(figsize=(8, 8))
-        # プロット領域（1x1分割の1番目に領域を配置せよという意味）
-        ax = fig.add_subplot(111)
-
         # 切片の色をグラデーションに
         # （参考）https://github.com/vaab/colour
         # （参考）https://www.tagindex.com/color/color_gradation.html
@@ -155,7 +154,7 @@ class ChartDrawer:
         print(colors)
 
         # 円グラフ
-        ax.pie(
+        self.ax.pie(
             values,
             labels=labels,
             colors=colors,
@@ -165,7 +164,7 @@ class ChartDrawer:
             autopct='%.1f%%',  # パーセンテージで出力
         )
         # タイトル
-        ax.set_title(f'{title} (N={self.sample_size})', size=16, pad=20)
+        self.ax.set_title(f'{title} (N={self.sample_size})', size=16, pad=20)
 
         # 描画
         if output_image_path is None:
@@ -195,26 +194,19 @@ class ChartDrawer:
         total_values = sum(values)
         print(f'total_values={total_values}')
 
-        # 共通初期設定
-        plt.rc('font', **font)
-        # キャンバス
-        fig = plt.figure(figsize=(8, 8))
-        # プロット領域（1x1分割の1番目に領域を配置せよという意味）
-        ax = fig.add_subplot(111)
-
         # Y軸を上下反転する
-        ax.invert_yaxis()
+        self.ax.invert_yaxis()
         # 横棒グラフ
-        ax.barh(
+        self.ax.barh(
             labels,
             values,
             height=0.5,  # 棒の太さ
         )
         # グラフの右側に値を表示
         for i, value in enumerate(values):
-            ax.text(value + 0.8, i, f'{value} ({(value / self.sample_size) * 100:.1f}%)')
+            self.ax.text(value + 0.8, i, f'{value} ({(value / self.sample_size) * 100:.1f}%)')
         # タイトル
-        ax.set_title(f'{title} (N={self.sample_size})', size=16, pad=30)
+        self.ax.set_title(f'{title} (N={self.sample_size})', size=16, pad=30)
 
         # 描画
         if output_image_path is None:
